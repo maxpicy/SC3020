@@ -4,15 +4,17 @@ Main entry point for the SQL Query Annotation Tool.
 SC3020 Database System Principles - Project 2
 
 Run this file to launch the application:
-    python project.py
+    python project.py          # Launches web GUI (FastAPI + React)
+    python project.py --cli    # Launches CLI mode
 """
 
 import sys
-from annotation import generate_annotations
 
 
 def cli_mode():
     """CLI mode for testing the annotation engine without the GUI."""
+    from annotation import generate_annotations
+
     print("=" * 60)
     print("SC3020 SQL Query Annotation Tool (CLI Mode)")
     print("=" * 60)
@@ -70,8 +72,7 @@ def cli_mode():
 
 
 def main():
-    # Check if we should run in CLI mode or GUI mode
-    if "--cli" in sys.argv or True:  # Default to CLI for now until GUI is implemented
+    if "--cli" in sys.argv:
         cli_mode()
     else:
         from interface import launch_gui

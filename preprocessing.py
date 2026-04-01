@@ -76,6 +76,7 @@ class SQLComponent:
 class PlanNode:
     """Represents a single node from the QEP/AQP tree."""
     node_type: str
+    id: int = 0              # Unique ID assigned during tree walk (for frontend mapping)
     relation_name: str = None
     alias: str = None
     total_cost: float = 0.0
@@ -198,11 +199,13 @@ def get_table_row_counts():
 # QEP/AQP Tree Walking
 # ============================================================
 
-def walk_plan_tree(plan_dict, parent_type=None, depth=0):
+def walk_plan_tree(plan_dict, parent_type=None, depth=0, _counter=None):
     """
     Recursively walk the JSON plan tree and return a flat list of PlanNode objects
-    in depth-first order.
+    in depth-first order. Each node gets a unique incrementing id.
     """
+    if _counter is None:
+        _counter = [0]
     # Remap Aggregate node type based on Strategy for consistent matching
     raw_node_type = plan_dict.get("Node Type", "Unknown")
     if raw_node_type == "Aggregate":
@@ -213,8 +216,12 @@ def walk_plan_tree(plan_dict, parent_type=None, depth=0):
             raw_node_type = "GroupAggregate"
         # else: keep as "Aggregate" (Plain strategy)
 
+    node_id = _counter[0]
+    _counter[0] += 1
+
     node = PlanNode(
         node_type=raw_node_type,
+        id=node_id,
         relation_name=plan_dict.get("Relation Name"),
         alias=plan_dict.get("Alias"),
         total_cost=plan_dict.get("Total Cost", 0.0),
@@ -250,7 +257,7 @@ def walk_plan_tree(plan_dict, parent_type=None, depth=0):
     # Recurse into children
     nodes = [node]
     for child_dict in plan_dict.get("Plans", []):
-        child_nodes = walk_plan_tree(child_dict, parent_type=node.node_type, depth=depth + 1)
+        child_nodes = walk_plan_tree(child_dict, parent_type=node.node_type, depth=depth + 1, _counter=_counter)
         node.children.extend([child_nodes[0]] if child_nodes else [])
         nodes.extend(child_nodes)
 

@@ -1,0 +1,394 @@
+/* ============================================================
+   SC3020 SQL Query Annotation Tool — Global Styles
+   ============================================================ */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #f5f5f5;
+  color: #333;
+  line-height: 1.5;
+}
+
+.app {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.app-header {
+  text-align: center;
+  padding: 20px 0 12px;
+  border-bottom: 2px solid #1565C0;
+  margin-bottom: 20px;
+}
+
+.app-header h1 {
+  font-size: 1.6rem;
+  color: #1565C0;
+}
+
+.app-main { display: flex; flex-direction: column; gap: 20px; }
+
+h2 {
+  font-size: 1.1rem;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+/* ---- Error Box ---- */
+.error-box {
+  background: #FFEBEE;
+  color: #C62828;
+  border: 1px solid #EF9A9A;
+  border-radius: 6px;
+  padding: 12px 16px;
+  font-size: 0.9rem;
+}
+
+/* ============================================================
+   Query Panel
+   ============================================================ */
+.query-panel {
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+.table-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+
+.chip-label {
+  font-size: 0.8rem;
+  color: #666;
+  margin-right: 4px;
+}
+
+.chip {
+  background: #E3F2FD;
+  color: #1565C0;
+  border: 1px solid #90CAF9;
+  border-radius: 12px;
+  padding: 2px 10px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.chip:hover { background: #BBDEFB; }
+
+.query-panel textarea {
+  width: 100%;
+  font-family: 'Menlo', 'Consolas', 'Courier New', monospace;
+  font-size: 0.9rem;
+  padding: 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.query-panel textarea:focus {
+  border-color: #1565C0;
+}
+
+.query-panel button {
+  margin-top: 10px;
+  padding: 10px 28px;
+  font-size: 0.95rem;
+  background: #1565C0;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.query-panel button:hover:not(:disabled) { background: #0D47A1; }
+.query-panel button:disabled { background: #90CAF9; cursor: not-allowed; }
+
+/* ============================================================
+   Results Container
+   ============================================================ */
+.results-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ============================================================
+   SQL Annotated View
+   ============================================================ */
+.sql-annotated-view {
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+  position: relative;
+}
+
+.sql-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: #555;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid;
+}
+
+.sql-code {
+  font-family: 'Menlo', 'Consolas', 'Courier New', monospace;
+  font-size: 0.9rem;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 14px;
+  background: #FAFAFA;
+  border-radius: 6px;
+  border: 1px solid #E0E0E0;
+}
+
+.sql-annotated {
+  border-radius: 3px;
+  padding: 1px 4px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.sql-annotated.hovered,
+.sql-annotated.selected {
+  border-style: solid;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.1);
+}
+
+.sql-annotated.selected {
+  box-shadow: 0 0 0 2px rgba(21,101,192,0.4);
+}
+
+/* ---- Tooltip ---- */
+.annotation-tooltip {
+  position: absolute;
+  z-index: 1000;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 14px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  max-width: 420px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  pointer-events: none;
+}
+
+.tooltip-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.tooltip-badge {
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.tooltip-node-type {
+  font-weight: 600;
+  color: #333;
+}
+
+.tooltip-section { margin-bottom: 6px; }
+.tooltip-section p { margin-top: 2px; color: #555; }
+
+.tooltip-cost {
+  font-size: 0.78rem;
+  color: #666;
+  padding-top: 6px;
+  border-top: 1px solid #eee;
+}
+
+.tooltip-alternatives {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #eee;
+}
+
+.tooltip-alternatives ul {
+  list-style: none;
+  padding: 0;
+  margin-top: 4px;
+}
+
+.tooltip-alternatives li {
+  font-size: 0.78rem;
+  color: #555;
+}
+
+.alt-ratio {
+  color: #C62828;
+  margin-left: 4px;
+  font-weight: 600;
+}
+
+/* ============================================================
+   QEP Tree View
+   ============================================================ */
+.qep-tree-view {
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+.qep-cost-summary {
+  font-size: 0.88rem;
+  color: #555;
+  margin-bottom: 12px;
+}
+
+.tree-scroll-container {
+  overflow-x: auto;
+  padding: 10px 0;
+}
+
+.tree-scroll-container svg {
+  display: block;
+  min-width: 100%;
+}
+
+.node-type {
+  font-size: 11px;
+  font-weight: 700;
+  fill: #333;
+}
+
+.node-rel {
+  font-size: 10px;
+  fill: #555;
+}
+
+.node-cost {
+  font-size: 9px;
+  fill: #777;
+}
+
+.node-rows {
+  font-size: 9px;
+  fill: #999;
+}
+
+.tree-node { transition: opacity 0.15s; }
+
+/* ============================================================
+   AQP Section
+   ============================================================ */
+.aqp-section {
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+.aqp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-bottom: 20px;
+}
+
+.aqp-table th {
+  background: #F5F5F5;
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 2px solid #E0E0E0;
+  font-weight: 600;
+  color: #555;
+}
+
+.aqp-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #EEE;
+}
+
+.aqp-table .qep-row {
+  background: #E8F5E9;
+  font-weight: 600;
+}
+
+.cost-higher { color: #C62828; font-weight: 600; }
+.cost-lower  { color: #2E7D32; font-weight: 600; }
+
+.aqp-scale-note {
+  font-size: 0.75rem;
+  color: #888;
+  font-style: italic;
+  margin-bottom: 8px;
+}
+
+.aqp-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.aqp-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bar-label {
+  min-width: 200px;
+  font-size: 0.8rem;
+  color: #555;
+  text-align: right;
+}
+
+.bar-container {
+  flex: 1;
+  background: #F5F5F5;
+  border-radius: 4px;
+  height: 30px;
+  overflow: visible;
+  position: relative;
+}
+
+.bar {
+  height: 100%;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #fff;
+  transition: width 0.4s ease;
+  min-width: fit-content;
+  white-space: nowrap;
+}
+
+.bar-qep { background: #4CAF50; }
+.bar-aqp { background: #EF5350; }
