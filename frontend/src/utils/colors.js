@@ -35,6 +35,13 @@ export const NODE_COLORS = {
   'Memoize':          '#E0E0E0',
   'Gather':           '#F5F5F5',
   'Gather Merge':     '#F5F5F5',
+  'Filter':           '#FFCCBC',
+  'Projection':       '#DCEDC8',
+};
+
+export const NODE_BORDER_COLORS = {
+  'Filter':     '#E64A19',
+  'Projection': '#689F38',
 };
 
 export function getNodeColor(nodeType) {

@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef } from 'react';
 import { getComponentColor } from '../utils/colors';
 import AnnotationTooltip from './AnnotationTooltip';
 
@@ -28,15 +28,24 @@ export default function SQLAnnotatedView({
       type: ann.component.component_type,
     }))
     .filter(s => !(s.start === 0 && s.end === 0)) // skip synthetic
-    .sort((a, b) => a.start - b.start || b.end - a.end);
+    .sort((a, b) => a.start - b.start || a.end - b.end);
 
-  // Remove overlapping spans: for each position, keep the first (outermost) span
+  // Remove overlapping spans: when two spans overlap, keep the shorter (more specific) one.
+  // Non-overlapping spans are always kept.
   const activeSpans = [];
-  let lastEnd = -1;
   for (const span of spans) {
-    if (span.start >= lastEnd) {
+    const last = activeSpans[activeSpans.length - 1];
+    if (!last || span.start >= last.end) {
+      // No overlap
       activeSpans.push(span);
-      lastEnd = span.end;
+    } else {
+      // Overlap: keep the shorter (more specific) span
+      const lastLen = last.end - last.start;
+      const spanLen = span.end - span.start;
+      if (spanLen < lastLen) {
+        activeSpans[activeSpans.length - 1] = span;
+      }
+      // else keep the existing one
     }
   }
 
@@ -98,11 +107,16 @@ export default function SQLAnnotatedView({
     );
   }
 
+  // Only show legend items for annotation types actually present
+  const presentTypes = new Set(annotations.map(a => a.component.component_type));
+  const legendTypes = ['scan', 'join', 'sort', 'aggregate', 'groupby', 'limit', 'having', 'filter']
+    .filter(t => presentTypes.has(t));
+
   return (
     <div className="sql-annotated-view" ref={containerRef}>
       <h2>Annotated SQL Query</h2>
       <div className="sql-legend">
-        {['scan', 'join', 'sort', 'aggregate', 'groupby', 'limit', 'having', 'filter'].map(type => {
+        {legendTypes.map(type => {
           const c = getComponentColor(type);
           return (
             <span key={type} className="legend-item">

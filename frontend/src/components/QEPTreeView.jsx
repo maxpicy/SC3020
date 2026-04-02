@@ -1,14 +1,16 @@
-import { useMemo, useRef, useEffect, useState } from 'react';
-import { layoutTree, NODE_W, NODE_H } from '../utils/treeLayout';
-import { getNodeColor } from '../utils/colors';
+import { useMemo, useRef, useEffect } from 'react';
+import { layoutTree, NODE_W, NODE_H, VIRTUAL_W, wrapText } from '../utils/treeLayout';
+import { getNodeColor, NODE_BORDER_COLORS } from '../utils/colors';
 
 /**
  * SVG-based QEP tree visualization.
  * Nodes are color-coded and interactive (hover/click syncs with SQL view).
+ * Virtual Filter and Projection blocks are rendered as distinct smaller nodes.
  */
 export default function QEPTreeView({
   qep,
   annotations,
+  tableRowCounts,
   hoveredIdx,
   setHoveredIdx,
   selectedIdx,
@@ -31,43 +33,50 @@ export default function QEPTreeView({
   // Layout the tree
   const { tree, totalWidth, totalHeight } = useMemo(() => {
     if (!qep || !qep[0]) return { tree: null, totalWidth: 0, totalHeight: 0 };
-    return layoutTree(qep[0].Plan);
-  }, [qep]);
-
-  // Draw connection arrow from selected tree node to SQL span
-  const [arrowPath, setArrowPath] = useState(null);
+    return layoutTree(qep[0].Plan, tableRowCounts);
+  }, [qep, tableRowCounts]);
 
   useEffect(() => {
-    if (selectedIdx === null || !containerRef.current) {
-      setArrowPath(null);
-      return;
-    }
-
-    const treeNode = document.getElementById(`tree-node-${selectedIdx}`);
+    if (selectedIdx === null || !containerRef.current) return;
     const sqlSpan = document.getElementById(`sql-span-${selectedIdx}`);
-    if (!treeNode || !sqlSpan) {
-      setArrowPath(null);
-      return;
-    }
-
-    // Scroll the SQL span into view
-    sqlSpan.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-    setArrowPath(null); // Arrows are handled via synchronized highlighting
+    if (sqlSpan) sqlSpan.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [selectedIdx]);
 
   if (!tree) return null;
+
+  /** Truncate text */
+  function truncate(text, maxChars = 28) {
+    if (!text) return '';
+    const s = String(text);
+    return s.length > maxChars ? s.slice(0, maxChars - 1) + '\u2026' : s;
+  }
+
+  /** Format a condition — strip outer parens and type casts (no truncation, text wraps) */
+  function formatCond(cond) {
+    if (!cond) return '';
+    let s = cond.replace(/::\w+(\(\d+\))?/g, '');
+    while (s.startsWith('(') && s.endsWith(')')) {
+      const inner = s.slice(1, -1);
+      let depth = 0, ok = true;
+      for (const c of inner) {
+        if (c === '(') depth++;
+        if (c === ')') depth--;
+        if (depth < 0) { ok = false; break; }
+      }
+      if (ok && depth === 0) s = inner; else break;
+    }
+    return s.trim();
+  }
 
   // Render edges recursively
   function renderEdges(node) {
     const edges = [];
     for (const child of node.children) {
       const x1 = node.cx;
-      const y1 = node.y + NODE_H;
+      const y1 = node.y + node.h;
       const x2 = child.cx;
       const y2 = child.y;
       const midY = (y1 + y2) / 2;
-
       edges.push(
         <path
           key={`edge-${node.id}-${child.id}`}
@@ -82,26 +91,119 @@ export default function QEPTreeView({
     return edges;
   }
 
-  // Render nodes recursively
-  function renderNodes(node) {
+  // Render a virtual (Filter/Projection) node — same solid style as real nodes
+  function renderVirtualNode(node) {
+    const nodeType = node.node['Node Type'] || '';
+    const detail = node.node._detail || '';
+    const fillColor = getNodeColor(nodeType);
+    const borderColor = NODE_BORDER_COLORS[nodeType] || '#666';
+    const lines = wrapText(detail, 32);
+    const isFilter = node.node._virtualType === 'filter';
+    const outputRows = node.node._outputRows;
+    const preFilterRows = node.node._preFilterRows;
+    let rowsY = node.y + 28 + lines.length * 14;
+
+    return (
+      <g key={`vnode-${node.id}`} className="tree-node">
+        <rect
+          x={node.x}
+          y={node.y}
+          width={node.w}
+          height={node.h}
+          rx={8}
+          ry={8}
+          fill={fillColor}
+          stroke={borderColor}
+          strokeWidth={1.5}
+        />
+        <text x={node.cx} y={node.y + 16} textAnchor="middle" className="node-type">
+          {nodeType}
+        </text>
+        {lines.map((line, i) => (
+          <text
+            key={`vline-${i}`}
+            x={node.cx}
+            y={node.y + 30 + i * 14}
+            textAnchor="middle"
+            className="node-detail"
+            fill="#444"
+          >
+            {line}
+          </text>
+        ))}
+        {isFilter && preFilterRows != null && (
+          <text x={node.cx} y={rowsY + 4} textAnchor="middle" className="node-cost">
+            {preFilterRows.toLocaleString()} rows → {outputRows.toLocaleString()} rows
+          </text>
+        )}
+        {isFilter && preFilterRows == null && outputRows != null && (
+          <text x={node.cx} y={rowsY + 4} textAnchor="middle" className="node-cost">
+            est. {outputRows.toLocaleString()} rows after filter
+          </text>
+        )}
+      </g>
+    );
+  }
+
+  // Render a real plan node
+  function renderRealNode(node) {
     const annIdx = nodeIdToAnnIdx[node.id];
     const isHovered = annIdx !== undefined && hoveredIdx === annIdx;
     const isSelected = annIdx !== undefined && selectedIdx === annIdx;
-    const fillColor = getNodeColor(node.node.hasOwnProperty('Node Type') ? node.node['Node Type'] : '');
+    const rawNodeType = node.node['Node Type'] || '';
+    const fillColor = getNodeColor(rawNodeType);
     const strokeColor = isHovered || isSelected ? '#1565C0' : '#666';
     const strokeWidth = isHovered || isSelected ? 3 : 1;
 
-    const nodeType = node.node['Node Type'] || '';
     const relName = node.node['Relation Name'] || '';
     const alias = node.node['Alias'] || '';
-    const cost = node.node['Total Cost'] || 0;
-    const rows = node.node['Plan Rows'] || 0;
+    const cost = node.node['Total Cost'] ?? 0;
+    const rows = node.node['Plan Rows'] ?? 0;
+    const hasFilter = !!node.node['Filter'];
+    const hashCond = node.node['Hash Cond'] || '';
+    const mergeCond = node.node['Merge Cond'] || '';
+    const joinFilter = node.node['Join Filter'] || '';
+    const indexCond = node.node['Index Cond'] || '';
+    const sortKey = node.node['Sort Key'] || null;
+    const groupKey = node.node['Group Key'] || null;
+    const joinCond = hashCond || mergeCond || joinFilter;
+    const preFilterRows = relName && tableRowCounts && tableRowCounts[relName]
+      ? tableRowCounts[relName] : null;
 
     const displayName = relName
       ? `${relName}${alias && alias !== relName ? ` (${alias})` : ''}`
       : '';
 
-    const nodes = [
+    // Build detail lines — wrap long text instead of truncating
+    let detailY = node.y + 68 + (hasFilter && preFilterRows != null ? 14 : 0);
+    const detailLines = [];
+
+    if (joinCond) {
+      const condText = formatCond(joinCond);
+      for (const line of wrapText('cond: ' + condText, 34)) {
+        detailLines.push({ text: line, color: '#2E7D32' });
+      }
+    }
+    if (indexCond) {
+      const idxText = formatCond(indexCond);
+      for (const line of wrapText('idx: ' + idxText, 34)) {
+        detailLines.push({ text: line, color: '#1565C0' });
+      }
+    }
+    if (sortKey) {
+      const sortText = sortKey.join(', ').replace(/::\w+/g, '');
+      for (const line of wrapText('sort: ' + sortText, 34)) {
+        detailLines.push({ text: line, color: '#E65100' });
+      }
+    }
+    if (groupKey) {
+      const groupText = groupKey.join(', ').replace(/::\w+/g, '');
+      for (const line of wrapText('group: ' + groupText, 34)) {
+        detailLines.push({ text: line, color: '#6A1B9A' });
+      }
+    }
+
+    return (
       <g
         key={`node-${node.id}`}
         id={annIdx !== undefined ? `tree-node-${annIdx}` : undefined}
@@ -114,8 +216,8 @@ export default function QEPTreeView({
         <rect
           x={node.x}
           y={node.y}
-          width={NODE_W}
-          height={NODE_H}
+          width={node.w}
+          height={node.h}
           rx={8}
           ry={8}
           fill={fillColor}
@@ -123,7 +225,7 @@ export default function QEPTreeView({
           strokeWidth={strokeWidth}
         />
         <text x={node.cx} y={node.y + 18} textAnchor="middle" className="node-type">
-          {nodeType}
+          {rawNodeType}
         </text>
         {displayName && (
           <text x={node.cx} y={node.y + 34} textAnchor="middle" className="node-rel">
@@ -131,18 +233,43 @@ export default function QEPTreeView({
           </text>
         )}
         <text x={node.cx} y={node.y + 50} textAnchor="middle" className="node-cost">
-          cost: {cost.toFixed(1)}
+          cost: {cost.toFixed(1)} | rows: {rows.toLocaleString()}
         </text>
-        <text x={node.cx} y={node.y + 64} textAnchor="middle" className="node-rows">
-          rows: {rows.toLocaleString()}
-        </text>
-      </g>,
-    ];
+        {hasFilter && preFilterRows != null && (
+          <text x={node.cx} y={node.y + 62} textAnchor="middle" className="node-rows">
+            (scans {preFilterRows.toLocaleString()} rows, filter applied during scan)
+          </text>
+        )}
+
+        {detailLines.map((dl, i) => (
+          <text
+            key={`detail-${i}`}
+            x={node.x + 6}
+            y={detailY + i * 14}
+            className="node-detail"
+            fill={dl.color}
+          >
+            {dl.text}
+          </text>
+        ))}
+      </g>
+    );
+  }
+
+  // Render all nodes recursively
+  function renderNodes(node) {
+    const elements = [];
+
+    if (node.node._virtual) {
+      elements.push(renderVirtualNode(node));
+    } else {
+      elements.push(renderRealNode(node));
+    }
 
     for (const child of node.children) {
-      nodes.push(...renderNodes(child));
+      elements.push(...renderNodes(child));
     }
-    return nodes;
+    return elements;
   }
 
   return (

@@ -57,6 +57,7 @@ function App() {
             <QEPTreeView
               qep={result.qep}
               annotations={result.annotations}
+              tableRowCounts={result.table_row_counts || {}}
               hoveredIdx={hoveredIdx}
               setHoveredIdx={setHoveredIdx}
               selectedIdx={selectedIdx}
@@ -66,6 +67,7 @@ function App() {
             <AQPSection
               qep={result.qep}
               aqps={result.aqps}
+              qepOperators={result.qep_operators || []}
             />
           </div>
         )}

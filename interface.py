@@ -16,7 +16,8 @@ from typing import Optional
 from annotation import generate_annotations, Annotation
 from preprocessing import (
     SQLComponent, PlanNode, AQPResult,
-    get_all_tables, get_table_indexes,
+    get_all_tables, get_table_indexes, get_table_row_counts,
+    walk_plan_tree, OPERATOR_TO_OPTION, SKIP_NODE_TYPES,
 )
 
 
@@ -82,6 +83,8 @@ class AnalyzeRequest(BaseModel):
 class AnalyzeResponse(BaseModel):
     annotations: list[AnnotationModel]
     qep: list  # Raw JSON plan
+    qep_operators: list[str]  # Key operator types used in QEP (e.g. ["Hash Join", "Seq Scan"])
+    table_row_counts: dict = {}  # {table_name: estimated_row_count}
     aqps: list[AQPResultModel]
     original_query: str
 
@@ -183,9 +186,27 @@ def analyze_query(request: AnalyzeRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    # Extract key operator types used in QEP
+    qep_nodes = walk_plan_tree(qep[0]["Plan"])
+    qep_ops = []
+    seen_ops = set()
+    for node in qep_nodes:
+        if node.node_type not in SKIP_NODE_TYPES and node.node_type in OPERATOR_TO_OPTION:
+            if node.node_type not in seen_ops:
+                seen_ops.add(node.node_type)
+                qep_ops.append(node.node_type)
+
+    # Get table row counts for pre-filter estimates
+    try:
+        row_counts = get_table_row_counts()
+    except Exception:
+        row_counts = {}
+
     return AnalyzeResponse(
         annotations=[convert_annotation(a) for a in annotations],
         qep=qep,
+        qep_operators=qep_ops,
+        table_row_counts=row_counts,
         aqps=[convert_aqp(a) for a in aqps],
         original_query=query,
     )

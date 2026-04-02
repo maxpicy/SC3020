@@ -19,7 +19,8 @@ from dataclasses import dataclass, field
 
 DB_CONFIG = {
     "dbname": "TPC-H",
-    "user": "maxwong",
+    "user": "claude",
+    "password": "pass",
     "host": "localhost",
     "port": 5432,
 }
@@ -871,6 +872,39 @@ def _get_tables_in_condition(condition, alias_map):
             tables.add(alias_map[ref])
         elif ref in alias_map.values():
             tables.add(ref)
+
+    # If no table.column patterns found, try matching bare column names
+    # against known table/alias column prefixes (e.g. c_custkey -> customer)
+    if not tables:
+        bare_cols = re.findall(r'\b([a-zA-Z]\w*)\b', cond_lower)
+        # Exclude SQL keywords and literals
+        sql_keywords = {
+            'and', 'or', 'not', 'in', 'is', 'null', 'like', 'between',
+            'exists', 'true', 'false', 'date', 'interval', 'case', 'when',
+            'then', 'else', 'end', 'as', 'select', 'from', 'where', 'asc',
+            'desc', 'any', 'all', 'some',
+        }
+        bare_cols = [c for c in bare_cols if c not in sql_keywords]
+        for col in bare_cols:
+            for alias, table in alias_map.items():
+                # Match by column prefix: e.g. column "o_custkey" matches alias "o" or table "orders"
+                # Common patterns: <alias>_<col>, <alias>.<col>, or <table_initial>_<col>
+                if col.startswith(alias + '_') or col.startswith(alias + '.'):
+                    tables.add(table)
+                    break
+                # Also try first letter of table name as prefix (TPC-H convention)
+                if len(table) > 0 and col.startswith(table[0] + '_'):
+                    # Verify this prefix uniquely identifies the table
+                    prefix = table[0] + '_'
+                    matching_tables = [t for a, t in alias_map.items()
+                                       if t.startswith(table[0])]
+                    if len(matching_tables) == 1:
+                        tables.add(table)
+                        break
+                # Also try first two letters
+                if len(table) > 1 and col.startswith(table[:2] + '_'):
+                    tables.add(table)
+                    break
 
     return tables
 

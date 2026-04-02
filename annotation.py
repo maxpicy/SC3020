@@ -258,12 +258,20 @@ def match_node_to_component(node, components, alias_map):
 
     # Join nodes -> match by join condition, fallback to table set
     elif nt in JOIN_NODE_TYPES:
-        # Try condition matching first
+        # Try condition matching first against join components
         if node.join_cond:
             for comp in components:
                 if comp.component_type == "join" and comp.conditions:
                     for sql_cond in comp.conditions:
                         if conditions_match(node.join_cond, sql_cond, alias_map):
+                            return comp
+            # Also try filter components (implicit joins classified as filters)
+            for comp in components:
+                if comp.component_type == "filter" and comp.conditions:
+                    for sql_cond in comp.conditions:
+                        if conditions_match(node.join_cond, sql_cond, alias_map):
+                            # Re-classify this filter as a join
+                            comp.component_type = "join"
                             return comp
 
         # Fallback: match by table set in subtree
@@ -395,7 +403,102 @@ def generate_annotations(query):
                             qep_cost=node.total_cost,
                         ))
 
+    # Generate filter annotations for WHERE filter conditions applied at scan nodes
+    for node in qep_nodes:
+        if node.node_type in SCAN_NODE_TYPES and node.filter_cond:
+            for comp in components:
+                if comp.component_type == "filter":
+                    comp_key = ("filter", comp.sql_text, comp.start_pos)
+                    if comp_key not in matched_components:
+                        if comp.conditions:
+                            for sql_cond in comp.conditions:
+                                if _filter_condition_matches(node.filter_cond, sql_cond,
+                                                            node.relation_name, alias_map):
+                                    matched_components.add(comp_key)
+                                    annotations.append(Annotation(
+                                        component=comp,
+                                        plan_node=node,
+                                        how=f"This filter is applied during scan of '{node.relation_name}'. "
+                                            f"Rows not satisfying this condition are discarded early.",
+                                        why="The filter is pushed down to the scan operator to reduce "
+                                            "the number of rows before any joins.",
+                                        qep_cost=node.total_cost,
+                                    ))
+                                    break
+
     return annotations, qep, aqps
+
+
+def _filter_condition_matches(plan_cond, sql_cond, relation_name, alias_map):
+    """
+    Check if a SQL filter condition matches (or is part of) a plan filter condition.
+    Handles composite plan conditions like:
+      ((orders.o_orderdate >= '1995-01-01'::date) AND (orders.o_orderdate < '1996-01-01'::date))
+    matching against individual SQL conditions like:
+      o_orderdate >= DATE '1995-01-01'
+    """
+    # First try exact match
+    if conditions_match(plan_cond, sql_cond, alias_map):
+        return True
+
+    # Normalize both for substring comparison
+    pn = normalize_condition(plan_cond)
+    sn = normalize_condition(sql_cond)
+
+    if not pn or not sn:
+        return False
+
+    # Resolve aliases in both
+    pn_resolved = _resolve_aliases_in_cond(pn, alias_map)
+    sn_resolved = _resolve_aliases_in_cond(sn, alias_map)
+
+    # Also strip the table prefix from plan condition to match bare column names
+    # e.g. "orders.o_orderdate >= '1995-01-01'" -> "o_orderdate >= '1995-01-01'"
+    pn_bare = pn_resolved
+    if relation_name:
+        pn_bare = pn_bare.replace(relation_name.lower() + '.', '')
+
+    # Strip "date " from SQL condition (SQL uses DATE '...' but plan uses '...'::date)
+    sn_clean = sn_resolved.replace("date '", "'").replace("date'", "'")
+    pn_clean = pn_bare.replace("date '", "'").replace("date'", "'")
+
+    # Check if the normalized SQL condition appears within the plan condition
+    if sn_clean in pn_clean:
+        return True
+
+    # Also try without table prefixes on the SQL side
+    sn_bare = sn_clean
+    for alias, table in alias_map.items():
+        sn_bare = sn_bare.replace(alias + '.', '').replace(table + '.', '')
+    pn_bare2 = pn_clean
+    for alias, table in alias_map.items():
+        pn_bare2 = pn_bare2.replace(alias + '.', '').replace(table + '.', '')
+
+    if sn_bare in pn_bare2:
+        return True
+
+    # Try matching just the column and operator pattern
+    # e.g. "o_orderdate >= " should appear in the plan condition
+    import re
+    col_op_match = re.match(r'(\w+)\s*(>=|<=|>|<|=|!=|<>|like|between)\s*', sn_bare, re.IGNORECASE)
+    if col_op_match:
+        col = col_op_match.group(1)
+        op = col_op_match.group(2)
+        val_part = sn_bare[col_op_match.end():].strip().strip("'\"")
+        # Check if column+operator+value appear in plan condition
+        if col in pn_bare2 and op in pn_bare2 and val_part in pn_bare2:
+            return True
+
+    return False
+
+
+def _resolve_aliases_in_cond(condition, alias_map):
+    """Replace aliases with table names in a condition string."""
+    import re
+    result = condition
+    for alias, table in sorted(alias_map.items(), key=lambda x: -len(x[0])):
+        result = re.sub(r'\b' + re.escape(alias) + r'\.', table + '.', result)
+    return result
 
 
 def _create_synthetic_component(node, query):
