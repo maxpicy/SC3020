@@ -1,7 +1,3 @@
-/**
- * Displays Alternative Query Plans with cost comparison bars.
- * Uses log scale for bars when the cost range spans more than 10x.
- */
 export default function AQPSection({ qep, aqps, qepOperators }) {
   if (!aqps || aqps.length === 0) return null;
 
@@ -29,7 +25,6 @@ export default function AQPSection({ qep, aqps, qepOperators }) {
     return cost.toFixed(0);
   }
 
-  // Format operator names for display (e.g. "enable_hashjoin" -> "Hash Join")
   const OP_MAP = {
     'enable_hashjoin': 'Hash Join',
     'enable_mergejoin': 'Merge Join',
@@ -54,24 +49,21 @@ export default function AQPSection({ qep, aqps, qepOperators }) {
     return `Without ${ops.slice(0, -1).join(', ')} & ${ops[ops.length - 1]}`;
   }
 
-  // Determine if an AQP has same cost as QEP (within 0.1%)
+  // Within 0.1% counts as same cost
   function isSameCost(aqpCost) {
     return Math.abs(aqpCost - qepCost) / qepCost < 0.001;
   }
 
-  // Generate explanation for same-cost AQPs
   function getSameCostExplanation(aqp) {
     const disabledOps = aqp.disabled_operators.map(formatOperator);
     const qepOps = qepOperators || [];
-    // Check if the disabled operators are not used by the QEP anyway
     const notUsedByQep = disabledOps.filter(op => !qepOps.includes(op));
     if (notUsedByQep.length > 0) {
-      return `Same cost because the QEP already uses ${qepOps.filter(o => !['Seq Scan', 'Sort', 'HashAggregate', 'Materialize'].includes(o)).join(', ') || qepOps.join(', ')} — disabling ${notUsedByQep.join(' and ')} has no effect.`;
+      return `Same cost because the QEP already uses ${qepOps.filter(o => !['Seq Scan', 'Sort', 'HashAggregate', 'Materialize'].includes(o)).join(', ') || qepOps.join(', ')} - disabling ${notUsedByQep.join(' and ')} has no effect.`;
     }
     return 'Same plan selected despite disabling these operators.';
   }
 
-  // Build the QEP operator summary
   const qepOps = qepOperators || [];
   const joinOps = qepOps.filter(o => ['Hash Join', 'Merge Join', 'Nested Loop'].includes(o));
   const scanOps = qepOps.filter(o => ['Seq Scan', 'Index Scan', 'Index Only Scan', 'Bitmap Heap Scan'].includes(o));
@@ -126,7 +118,6 @@ export default function AQPSection({ qep, aqps, qepOperators }) {
                 </td>
                 <td className="aqp-ops-cell">
                   {aqp.nodes && aqp.nodes.length > 0 && (() => {
-                    // Extract operators from AQP nodes
                     const aqpNodeTypes = new Set();
                     const collectOps = (nodes) => {
                       for (const n of nodes) {
@@ -187,7 +178,7 @@ export default function AQPSection({ qep, aqps, qepOperators }) {
                 />
                 <span className="bar-value">
                   {formatCost(aqp.total_cost)} ({ratio}x)
-                  {sameCost && ' — no change'}
+                  {sameCost && ' - no change'}
                 </span>
               </div>
             </div>

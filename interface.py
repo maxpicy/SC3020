@@ -1,9 +1,3 @@
-"""
-interface.py
-FastAPI application serving the SQL Query Annotation Tool.
-Provides API endpoints for query analysis and serves the React frontend.
-"""
-
 import os
 import uvicorn
 from fastapi import FastAPI, HTTPException
@@ -20,10 +14,6 @@ from preprocessing import (
     walk_plan_tree, OPERATOR_TO_OPTION, SKIP_NODE_TYPES,
 )
 
-
-# ============================================================
-# Pydantic Models (for JSON serialization)
-# ============================================================
 
 class SQLComponentModel(BaseModel):
     component_type: str
@@ -52,11 +42,10 @@ class PlanNodeModel(BaseModel):
     index_name: Optional[str] = None
     index_cond: Optional[str] = None
     parent_node_type: Optional[str] = None
-    children: list = []  # Will be list[PlanNodeModel] after update_forward_refs
+    children: list = []
     depth: int = 0
 
 
-# Enable recursive self-reference
 PlanNodeModel.model_rebuild()
 
 
@@ -93,12 +82,7 @@ class TablesResponse(BaseModel):
     tables: list[str]
 
 
-# ============================================================
-# Dataclass -> Pydantic Converters
-# ============================================================
-
 def convert_plan_node(node: PlanNode) -> PlanNodeModel:
-    """Convert a PlanNode dataclass to a Pydantic model (recursive)."""
     return PlanNodeModel(
         id=node.id,
         node_type=node.node_type,
@@ -121,7 +105,6 @@ def convert_plan_node(node: PlanNode) -> PlanNodeModel:
 
 
 def convert_component(comp: SQLComponent) -> SQLComponentModel:
-    """Convert an SQLComponent dataclass to a Pydantic model."""
     return SQLComponentModel(
         component_type=comp.component_type,
         sql_text=comp.sql_text,
@@ -135,7 +118,6 @@ def convert_component(comp: SQLComponent) -> SQLComponentModel:
 
 
 def convert_annotation(ann: Annotation) -> AnnotationModel:
-    """Convert an Annotation dataclass to a Pydantic model."""
     return AnnotationModel(
         component=convert_component(ann.component),
         plan_node=convert_plan_node(ann.plan_node),
@@ -147,8 +129,7 @@ def convert_annotation(ann: Annotation) -> AnnotationModel:
 
 
 def convert_aqp(aqp: AQPResult) -> AQPResultModel:
-    """Convert an AQPResult dataclass to a Pydantic model."""
-    # Only convert top-level nodes (not the full flat list, just the tree root)
+    # Only convert root nodes, not the full flat list
     root_nodes = [n for n in aqp.nodes if n.depth == 0]
     return AQPResultModel(
         disabled_operators=aqp.disabled_operators,
@@ -158,13 +139,9 @@ def convert_aqp(aqp: AQPResult) -> AQPResultModel:
     )
 
 
-# ============================================================
-# FastAPI Application
-# ============================================================
-
 app = FastAPI(title="SC3020 SQL Query Annotation Tool")
 
-# CORS for development (Vite dev server on port 5173)
+# CORS for dev (Vite on port 5173)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -176,7 +153,6 @@ app.add_middleware(
 
 @app.post("/api/analyze", response_model=AnalyzeResponse)
 def analyze_query(request: AnalyzeRequest):
-    """Analyze an SQL query and return annotations, QEP, and AQPs."""
     query = request.query.strip().rstrip(";")
     if not query:
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
@@ -186,7 +162,6 @@ def analyze_query(request: AnalyzeRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Extract key operator types used in QEP
     qep_nodes = walk_plan_tree(qep[0]["Plan"])
     qep_ops = []
     seen_ops = set()
@@ -196,7 +171,6 @@ def analyze_query(request: AnalyzeRequest):
                 seen_ops.add(node.node_type)
                 qep_ops.append(node.node_type)
 
-    # Get table row counts for pre-filter estimates
     try:
         row_counts = get_table_row_counts()
     except Exception:
@@ -214,7 +188,6 @@ def analyze_query(request: AnalyzeRequest):
 
 @app.get("/api/tables", response_model=TablesResponse)
 def list_tables():
-    """List all tables in the database."""
     try:
         tables = get_all_tables()
     except Exception as e:
@@ -230,7 +203,6 @@ if os.path.isdir(FRONTEND_DIR):
 
     @app.get("/{full_path:path}")
     def serve_spa(full_path: str):
-        """Serve the React SPA for all non-API routes."""
         file_path = os.path.join(FRONTEND_DIR, full_path)
         if os.path.isfile(file_path):
             return FileResponse(file_path)
@@ -238,7 +210,6 @@ if os.path.isdir(FRONTEND_DIR):
 
 
 def launch_gui():
-    """Launch the web-based GUI via uvicorn."""
     print("=" * 60)
     print("SC3020 SQL Query Annotation Tool")
     print("Starting web server at http://127.0.0.1:8000")

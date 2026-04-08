@@ -1,7 +1,3 @@
-/**
- * Color mapping for SQL component types.
- */
-
 export const COMPONENT_COLORS = {
   scan:      { bg: '#BBDEFB', border: '#1976D2', label: 'Scan' },
   join:      { bg: '#C8E6C9', border: '#388E3C', label: 'Join' },

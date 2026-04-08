@@ -1,9 +1,3 @@
-"""
-annotation.py
-Contains the algorithm for generating annotations for SQL query components
-based on QEP and AQP analysis.
-"""
-
 from dataclasses import dataclass, field
 from preprocessing import (
     SQLComponent, PlanNode, AQPResult,
@@ -17,22 +11,15 @@ from preprocessing import (
 
 @dataclass
 class Annotation:
-    """A single annotation linking an SQL component to its plan execution."""
     component: SQLComponent
     plan_node: PlanNode
     how: str                        # Human-readable HOW explanation
     why: str                        # Human-readable WHY explanation
     qep_cost: float = 0.0
-    alternative_costs: dict = field(default_factory=dict)  # {operator_name: cost}
+    alternative_costs: dict = field(default_factory=dict)
 
-
-# ============================================================
-# HOW Explanation Generation
-# ============================================================
 
 def generate_how(node):
-    """Generate a human-readable explanation of HOW a plan node executes."""
-
     nt = node.node_type
 
     if nt == "Seq Scan":
@@ -86,7 +73,6 @@ def generate_how(node):
         if node.join_cond:
             text += f" Join condition: {node.join_cond}."
         elif node.children:
-            # Check inner child for index condition
             for child in node.children:
                 if child.index_cond:
                     text += f" Inner lookup uses index condition: {child.index_cond}."
@@ -96,7 +82,6 @@ def generate_how(node):
     elif nt == "Sort":
         keys = ", ".join(node.sort_key) if node.sort_key else "unknown"
         text = f"Results are sorted by {keys}."
-        # Check if sort is for a merge join
         if node.parent_node_type == "Merge Join":
             text += " This sort is required to prepare input for merge join."
         elif node.parent_node_type in ("GroupAggregate", "Unique"):
@@ -162,32 +147,21 @@ def generate_how(node):
         return text
 
 
-# ============================================================
-# WHY Explanation Generation
-# ============================================================
-
 def generate_why(node, aqps, alias_map, table_indexes=None):
-    """
-    Generate a human-readable explanation of WHY a particular operator was chosen,
-    comparing with alternative operators from AQPs.
-    """
     nt = node.node_type
 
-    # Get the planner option that controls this node type
     option = OPERATOR_TO_OPTION.get(nt)
     if option is None:
-        # Check for special cases
         if nt == "Sort" and node.parent_node_type in ("Merge Join", "GroupAggregate", "Unique"):
             return f"This sort is required by the parent {node.parent_node_type} operator."
         return ""
 
-    # Find AQPs where this operator was disabled
     relevant_aqps = [a for a in aqps if option in a.disabled_operators]
     if not relevant_aqps:
         return "No alternative plans were generated for comparison."
 
     parts = []
-    alternatives_found = {}  # {alt_type: (cost, ratio)} — deduplicated by operator name
+    alternatives_found = {}  # {alt_type: (cost, ratio)} - deduplicated by operator name
 
     for aqp in relevant_aqps:
         corr_node = find_corresponding_node(node, aqp.nodes, alias_map)
@@ -197,12 +171,10 @@ def generate_why(node, aqps, alias_map, table_indexes=None):
                 cost_ratio = corr_node.total_cost / node.total_cost
             else:
                 cost_ratio = float('inf')
-            # Keep the entry with the lowest cost for each alternative type
             if (corr_node.node_type not in alternatives_found or
                     corr_node.total_cost < alternatives_found[corr_node.node_type][0]):
                 alternatives_found[corr_node.node_type] = (corr_node.total_cost, cost_ratio)
         elif corr_node and corr_node.node_type == nt:
-            # Same operator still chosen even when disabled
             qep_total = node.total_cost
             aqp_total = aqp.total_cost
             if qep_total > 0:
@@ -237,18 +209,10 @@ def generate_why(node, aqps, alias_map, table_indexes=None):
     return " ".join(parts)
 
 
-# ============================================================
-# Node-to-SQL Component Matching
-# ============================================================
-
 def match_node_to_component(node, components, alias_map):
-    """
-    Match a QEP plan node to the corresponding SQL component.
-    Returns the matched SQLComponent, or None if no match.
-    """
     nt = node.node_type
 
-    # Scan nodes -> match by table name
+    # Scan nodes - match by table name
     if nt in SCAN_NODE_TYPES:
         target_table = (node.relation_name or "").lower()
         for comp in components:
@@ -256,25 +220,22 @@ def match_node_to_component(node, components, alias_map):
                 if target_table in comp.tables:
                     return comp
 
-    # Join nodes -> match by join condition, fallback to table set
+    # Join nodes - match by join condition, fallback to table set
     elif nt in JOIN_NODE_TYPES:
-        # Try condition matching first against join components
         if node.join_cond:
             for comp in components:
                 if comp.component_type == "join" and comp.conditions:
                     for sql_cond in comp.conditions:
                         if conditions_match(node.join_cond, sql_cond, alias_map):
                             return comp
-            # Also try filter components (implicit joins classified as filters)
+            # Implicit joins may have been classified as filters
             for comp in components:
                 if comp.component_type == "filter" and comp.conditions:
                     for sql_cond in comp.conditions:
                         if conditions_match(node.join_cond, sql_cond, alias_map):
-                            # Re-classify this filter as a join
                             comp.component_type = "join"
                             return comp
 
-        # Fallback: match by table set in subtree
         node_tables = get_tables_in_subtree(node)
         best_match = None
         best_overlap = 0
@@ -288,33 +249,29 @@ def match_node_to_component(node, components, alias_map):
         if best_match:
             return best_match
 
-    # Sort nodes -> match to ORDER BY component (unless optimizer-introduced)
+    # Sort nodes - match to ORDER BY (unless optimizer-introduced)
     elif nt == "Sort":
         if node.parent_node_type not in ("Merge Join", "GroupAggregate", "Unique"):
             for comp in components:
                 if comp.component_type == "sort":
                     return comp
 
-    # Aggregate nodes -> match to GROUP BY or aggregate in SELECT
+    # Aggregate nodes - match to GROUP BY or aggregate in SELECT
     elif nt in AGGREGATE_NODE_TYPES:
-        # If has group key, match to GROUP BY
         if node.group_key:
             for comp in components:
                 if comp.component_type == "groupby":
                     return comp
-        # If has filter, also match to HAVING (secondary annotation)
-        # Plain aggregate -> match to aggregate functions in SELECT
+        # Plain aggregate - match to aggregate functions in SELECT
         for comp in components:
             if comp.component_type == "aggregate":
                 return comp
 
-    # Limit -> match to LIMIT component
     elif nt == "Limit":
         for comp in components:
             if comp.component_type == "limit":
                 return comp
 
-    # Unique -> match to DISTINCT
     elif nt == "Unique":
         for comp in components:
             if comp.component_type == "distinct":
@@ -323,59 +280,40 @@ def match_node_to_component(node, components, alias_map):
     return None
 
 
-# ============================================================
-# Main Annotation Orchestration
-# ============================================================
-
 def generate_annotations(query):
-    """
-    Main function: takes an SQL query, retrieves QEP and AQPs,
-    and returns a list of Annotation objects explaining each component.
-    """
-    # Step 1: Parse the SQL query
     components, alias_map = parse_query(query)
 
-    # Step 2: Retrieve QEP
     qep = get_qep(query)
     qep_root = qep[0]["Plan"]
     qep_nodes = walk_plan_tree(qep_root)
 
-    # Step 3: Generate targeted AQPs
     aqps = get_targeted_aqps(query, qep_nodes)
 
-    # Step 4: Get table index info for WHY explanations
     try:
         table_indexes = get_table_indexes()
     except Exception:
         table_indexes = {}
 
-    # Step 5: Generate annotations for each meaningful plan node
     annotations = []
-    matched_components = set()  # Track which components have been annotated
+    matched_components = set()
 
     for node in qep_nodes:
-        # Skip auxiliary/transparent nodes
         if node.node_type in SKIP_NODE_TYPES:
             continue
 
-        # Find matching SQL component
         component = match_node_to_component(node, components, alias_map)
 
         if component is None:
-            # Create a synthetic component for plan-only operations
             component = _create_synthetic_component(node, query)
 
-        # Avoid duplicate annotations for the same component
         comp_key = (component.component_type, component.sql_text, component.start_pos)
         if comp_key in matched_components:
             continue
         matched_components.add(comp_key)
 
-        # Generate HOW and WHY
         how = generate_how(node)
         why = generate_why(node, aqps, alias_map, table_indexes)
 
-        # Collect alternative costs
         alt_costs = _get_alternative_costs(node, aqps, alias_map)
 
         annotations.append(Annotation(
@@ -387,7 +325,7 @@ def generate_annotations(query):
             alternative_costs=alt_costs,
         ))
 
-    # Also generate HAVING annotation if aggregate node has a filter
+    # HAVING annotation for aggregate nodes with filters
     for node in qep_nodes:
         if node.node_type in AGGREGATE_NODE_TYPES and node.filter_cond:
             for comp in components:
@@ -403,7 +341,7 @@ def generate_annotations(query):
                             qep_cost=node.total_cost,
                         ))
 
-    # Generate filter annotations for WHERE filter conditions applied at scan nodes
+    # Filter annotations for WHERE conditions pushed down to scan nodes
     for node in qep_nodes:
         if node.node_type in SCAN_NODE_TYPES and node.filter_cond:
             for comp in components:
@@ -430,43 +368,31 @@ def generate_annotations(query):
 
 
 def _filter_condition_matches(plan_cond, sql_cond, relation_name, alias_map):
-    """
-    Check if a SQL filter condition matches (or is part of) a plan filter condition.
-    Handles composite plan conditions like:
-      ((orders.o_orderdate >= '1995-01-01'::date) AND (orders.o_orderdate < '1996-01-01'::date))
-    matching against individual SQL conditions like:
-      o_orderdate >= DATE '1995-01-01'
-    """
-    # First try exact match
+    """Handles composite plan conditions matching against individual SQL conditions."""
     if conditions_match(plan_cond, sql_cond, alias_map):
         return True
 
-    # Normalize both for substring comparison
     pn = normalize_condition(plan_cond)
     sn = normalize_condition(sql_cond)
 
     if not pn or not sn:
         return False
 
-    # Resolve aliases in both
     pn_resolved = _resolve_aliases_in_cond(pn, alias_map)
     sn_resolved = _resolve_aliases_in_cond(sn, alias_map)
 
-    # Also strip the table prefix from plan condition to match bare column names
-    # e.g. "orders.o_orderdate >= '1995-01-01'" -> "o_orderdate >= '1995-01-01'"
+    # Strip table prefix so "orders.o_orderdate" matches bare "o_orderdate"
     pn_bare = pn_resolved
     if relation_name:
         pn_bare = pn_bare.replace(relation_name.lower() + '.', '')
 
-    # Strip "date " from SQL condition (SQL uses DATE '...' but plan uses '...'::date)
+    # SQL uses DATE '...' but plan uses '...'::date
     sn_clean = sn_resolved.replace("date '", "'").replace("date'", "'")
     pn_clean = pn_bare.replace("date '", "'").replace("date'", "'")
 
-    # Check if the normalized SQL condition appears within the plan condition
     if sn_clean in pn_clean:
         return True
 
-    # Also try without table prefixes on the SQL side
     sn_bare = sn_clean
     for alias, table in alias_map.items():
         sn_bare = sn_bare.replace(alias + '.', '').replace(table + '.', '')
@@ -477,15 +403,13 @@ def _filter_condition_matches(plan_cond, sql_cond, relation_name, alias_map):
     if sn_bare in pn_bare2:
         return True
 
-    # Try matching just the column and operator pattern
-    # e.g. "o_orderdate >= " should appear in the plan condition
+    # Last resort: match column + operator + value individually
     import re
     col_op_match = re.match(r'(\w+)\s*(>=|<=|>|<|=|!=|<>|like|between)\s*', sn_bare, re.IGNORECASE)
     if col_op_match:
         col = col_op_match.group(1)
         op = col_op_match.group(2)
         val_part = sn_bare[col_op_match.end():].strip().strip("'\"")
-        # Check if column+operator+value appear in plan condition
         if col in pn_bare2 and op in pn_bare2 and val_part in pn_bare2:
             return True
 
@@ -493,7 +417,6 @@ def _filter_condition_matches(plan_cond, sql_cond, relation_name, alias_map):
 
 
 def _resolve_aliases_in_cond(condition, alias_map):
-    """Replace aliases with table names in a condition string."""
     import re
     result = condition
     for alias, table in sorted(alias_map.items(), key=lambda x: -len(x[0])):
@@ -502,7 +425,6 @@ def _resolve_aliases_in_cond(condition, alias_map):
 
 
 def _create_synthetic_component(node, query):
-    """Create a synthetic SQLComponent for plan nodes that don't map to SQL text."""
     nt = node.node_type
 
     if nt == "Sort" and node.parent_node_type in ("Merge Join", "GroupAggregate", "Unique"):
@@ -521,7 +443,6 @@ def _create_synthetic_component(node, query):
 
 
 def _get_alternative_costs(node, aqps, alias_map):
-    """Collect costs of alternative operators from AQPs."""
     costs = {}
     option = OPERATOR_TO_OPTION.get(node.node_type)
     if not option:
@@ -531,7 +452,6 @@ def _get_alternative_costs(node, aqps, alias_map):
         if option in aqp.disabled_operators:
             corr = find_corresponding_node(node, aqp.nodes, alias_map)
             if corr and corr.node_type != node.node_type:
-                # Keep the lowest cost for each alternative type
                 if corr.node_type not in costs or corr.total_cost < costs[corr.node_type]:
                     costs[corr.node_type] = corr.total_cost
 

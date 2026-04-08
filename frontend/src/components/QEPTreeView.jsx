@@ -2,11 +2,6 @@ import { useMemo, useRef, useEffect } from 'react';
 import { layoutTree, NODE_W, NODE_H, VIRTUAL_W, wrapText } from '../utils/treeLayout';
 import { getNodeColor, NODE_BORDER_COLORS } from '../utils/colors';
 
-/**
- * SVG-based QEP tree visualization.
- * Nodes are color-coded and interactive (hover/click syncs with SQL view).
- * Virtual Filter and Projection blocks are rendered as distinct smaller nodes.
- */
 export default function QEPTreeView({
   qep,
   annotations,
@@ -19,7 +14,6 @@ export default function QEPTreeView({
   const svgRef = useRef(null);
   const containerRef = useRef(null);
 
-  // Build node-id to annotation-index map
   const nodeIdToAnnIdx = useMemo(() => {
     const map = {};
     annotations.forEach((ann, idx) => {
@@ -30,7 +24,6 @@ export default function QEPTreeView({
     return map;
   }, [annotations]);
 
-  // Layout the tree
   const { tree, totalWidth, totalHeight } = useMemo(() => {
     if (!qep || !qep[0]) return { tree: null, totalWidth: 0, totalHeight: 0 };
     return layoutTree(qep[0].Plan, tableRowCounts);
@@ -44,14 +37,12 @@ export default function QEPTreeView({
 
   if (!tree) return null;
 
-  /** Truncate text */
   function truncate(text, maxChars = 28) {
     if (!text) return '';
     const s = String(text);
     return s.length > maxChars ? s.slice(0, maxChars - 1) + '\u2026' : s;
   }
 
-  /** Format a condition — strip outer parens and type casts (no truncation, text wraps) */
   function formatCond(cond) {
     if (!cond) return '';
     let s = cond.replace(/::\w+(\(\d+\))?/g, '');
@@ -68,7 +59,6 @@ export default function QEPTreeView({
     return s.trim();
   }
 
-  // Render edges recursively
   function renderEdges(node) {
     const edges = [];
     for (const child of node.children) {
@@ -91,7 +81,6 @@ export default function QEPTreeView({
     return edges;
   }
 
-  // Render a virtual (Filter/Projection) node — same solid style as real nodes
   function renderVirtualNode(node) {
     const nodeType = node.node['Node Type'] || '';
     const detail = node.node._detail || '';
@@ -145,7 +134,6 @@ export default function QEPTreeView({
     );
   }
 
-  // Render a real plan node
   function renderRealNode(node) {
     const annIdx = nodeIdToAnnIdx[node.id];
     const isHovered = annIdx !== undefined && hoveredIdx === annIdx;
@@ -174,7 +162,6 @@ export default function QEPTreeView({
       ? `${relName}${alias && alias !== relName ? ` (${alias})` : ''}`
       : '';
 
-    // Build detail lines — wrap long text instead of truncating
     let detailY = node.y + 68 + (hasFilter && preFilterRows != null ? 14 : 0);
     const detailLines = [];
 
@@ -256,7 +243,6 @@ export default function QEPTreeView({
     );
   }
 
-  // Render all nodes recursively
   function renderNodes(node) {
     const elements = [];
 

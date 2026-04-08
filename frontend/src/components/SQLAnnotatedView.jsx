@@ -2,10 +2,6 @@ import { useRef } from 'react';
 import { getComponentColor } from '../utils/colors';
 import AnnotationTooltip from './AnnotationTooltip';
 
-/**
- * Renders the SQL query with color-coded annotation spans.
- * Hovering a span shows a tooltip; clicking highlights the QEP tree node.
- */
 export default function SQLAnnotatedView({
   query,
   annotations,
@@ -19,7 +15,6 @@ export default function SQLAnnotatedView({
 }) {
   const containerRef = useRef(null);
 
-  // Build annotation spans sorted by position
   const spans = annotations
     .map((ann, idx) => ({
       start: ann.component.start_pos,
@@ -30,31 +25,25 @@ export default function SQLAnnotatedView({
     .filter(s => !(s.start === 0 && s.end === 0)) // skip synthetic
     .sort((a, b) => a.start - b.start || a.end - b.end);
 
-  // Remove overlapping spans: when two spans overlap, keep the shorter (more specific) one.
-  // Non-overlapping spans are always kept.
+  // On overlap, keep the shorter (more specific) span
   const activeSpans = [];
   for (const span of spans) {
     const last = activeSpans[activeSpans.length - 1];
     if (!last || span.start >= last.end) {
-      // No overlap
       activeSpans.push(span);
     } else {
-      // Overlap: keep the shorter (more specific) span
       const lastLen = last.end - last.start;
       const spanLen = span.end - span.start;
       if (spanLen < lastLen) {
         activeSpans[activeSpans.length - 1] = span;
       }
-      // else keep the existing one
     }
   }
 
-  // Build React elements by walking through the query string
   const elements = [];
   let pos = 0;
 
   for (const span of activeSpans) {
-    // Plain text before this span
     if (pos < span.start) {
       elements.push(
         <span key={`plain-${pos}`} className="sql-plain">
@@ -98,7 +87,6 @@ export default function SQLAnnotatedView({
     pos = span.end;
   }
 
-  // Remaining plain text
   if (pos < query.length) {
     elements.push(
       <span key={`plain-end`} className="sql-plain">
@@ -107,7 +95,6 @@ export default function SQLAnnotatedView({
     );
   }
 
-  // Only show legend items for annotation types actually present
   const presentTypes = new Set(annotations.map(a => a.component.component_type));
   const legendTypes = ['scan', 'join', 'sort', 'aggregate', 'groupby', 'limit', 'having', 'filter']
     .filter(t => presentTypes.has(t));

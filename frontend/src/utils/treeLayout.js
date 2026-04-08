@@ -1,9 +1,3 @@
-/**
- * Recursive tree layout algorithm for QEP visualization.
- * Computes (x, y) positions for each node in a top-down tree.
- * Injects virtual "Filter" and "Projection" wrapper nodes in correct data-flow order.
- */
-
 const NODE_W = 220;
 const VIRTUAL_W = 220;
 const NODE_H_BASE = 72;
@@ -11,9 +5,6 @@ const NODE_H_LINE = 14;
 const H_GAP = 24;
 const V_GAP = 36;
 
-/**
- * Count extra detail lines for a node, accounting for text wrapping.
- */
 function nodeDetailLines(planNode) {
   let lines = 0;
   // Pre-filter note on scan nodes with filters
@@ -31,7 +22,6 @@ function nodeDetailLines(planNode) {
 
 function getNodeHeight(planNode) {
   if (planNode._virtual) {
-    // Dynamic height: title line + detail lines + optional rows line + padding
     const detail = planNode._detail || '';
     const lines = wrapText(detail, 32).length;
     const isFilter = planNode._virtualType === 'filter';
@@ -45,9 +35,6 @@ function getNodeWidth(planNode) {
   return planNode._virtual ? VIRTUAL_W : NODE_W;
 }
 
-/**
- * Split text into lines that fit within maxChars.
- */
 function wrapText(text, maxChars) {
   if (!text || text.length <= maxChars) return [text || ''];
   const words = text.split(/(\s+|,\s*)/);
@@ -91,14 +78,7 @@ function formatOutputCols(output) {
   return cols.join(', ');
 }
 
-/**
- * Inject virtual Filter and Projection wrapper nodes into the plan tree.
- * Data flows bottom-up, so the correct order from bottom to top is:
- *   Original Node → Filter (if any) → Projection (if any) → Parent
- *
- * We achieve this by wrapping: the returned node may be the original,
- * or a Projection wrapping a Filter wrapping the original.
- */
+// Bottom-up wrapping: Original Node -> Filter -> Projection -> Parent
 function injectVirtualNodes(planNode) {
   const node = { ...planNode };
   const myOutput = node['Output'] || [];
@@ -112,7 +92,6 @@ function injectVirtualNodes(planNode) {
 
   let result = node;
 
-  // Wrap with Filter if this node has a filter condition
   if (node['Filter']) {
     const relName = node['Relation Name'] || '';
     const preFilterRows = relName && rowCounts[relName] ? rowCounts[relName] : null;
@@ -130,9 +109,7 @@ function injectVirtualNodes(planNode) {
     result = filterNode;
   }
 
-  // Wrap with Projection only where columns are actually narrowed.
-  // Compare this node's output to its children's combined output.
-  // Skip scans that output all columns (no real projection happening).
+  // Only show projection when columns are actually narrowed
   const output = node['Output'] || [];
   const nodeType = node['Node Type'] || '';
   const SKIP_PROJ = ['Hash', 'Materialize', 'Memoize', 'Gather', 'Gather Merge', 'Filter', 'Projection'];
@@ -142,27 +119,20 @@ function injectVirtualNodes(planNode) {
     const realChildren = (node.Plans || []).filter(c => !c._virtual);
     const childOutputs = realChildren.flatMap(c => c['Output'] || []);
 
-    // For scan nodes: only show projection if output is a subset of table columns
-    // (i.e., not reading all columns). For joins/agg: show if reducing columns.
     const isScan = SCAN_TYPES.includes(nodeType);
     const reducesColumns = childOutputs.length > 0 && output.length < childOutputs.length;
     const isRoot = planNode._isRoot;
 
-    // For scans, check if the parent needs fewer columns than this node outputs
-    // by looking at what the parent actually uses
     let showProjection = false;
     if (isRoot) {
       showProjection = true;
     } else if (reducesColumns) {
       showProjection = true;
     } else if (isScan && node._parentOutput) {
-      // Parent needs fewer columns than scan produces
       showProjection = node._parentOutput.length < output.length;
     }
 
     if (showProjection) {
-      // For the projection detail, show the columns THIS node outputs
-      // (which are the reduced set the parent needs)
       const projNode = {
         'Node Type': 'Projection',
         'Total Cost': 0,
@@ -179,9 +149,6 @@ function injectVirtualNodes(planNode) {
   return result;
 }
 
-/**
- * Recursively compute widths bottom-up.
- */
 function computeWidths(planNode) {
   const children = planNode.Plans || [];
   const childLayouts = children.map(c => computeWidths(c));
@@ -207,9 +174,6 @@ function computeWidths(planNode) {
   };
 }
 
-/**
- * Assign x positions top-down.
- */
 function assignPositions(layout, x, y, depth, counter) {
   const id = counter.value++;
   const nodeH = layout.height;
@@ -245,9 +209,6 @@ function assignPositions(layout, x, y, depth, counter) {
   return positioned;
 }
 
-/**
- * Main entry: layout a QEP plan tree for SVG rendering.
- */
 export function layoutTree(planRoot, tableRowCounts) {
   if (!planRoot) return { tree: null, totalWidth: 0, totalHeight: 0 };
 

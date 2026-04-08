@@ -1,7 +1,3 @@
-/* ============================================================
-   SC3020 SQL Query Annotation Tool — Global Styles
-   ============================================================ */
-
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
@@ -37,7 +33,6 @@ h2 {
   color: #333;
 }
 
-/* ---- Error Box ---- */
 .error-box {
   background: #FFEBEE;
   color: #C62828;
@@ -47,9 +42,6 @@ h2 {
   font-size: 0.9rem;
 }
 
-/* ============================================================
-   Query Panel
-   ============================================================ */
 .query-panel {
   background: #fff;
   border-radius: 8px;
@@ -112,18 +104,12 @@ h2 {
 .query-panel button:hover:not(:disabled) { background: #0D47A1; }
 .query-panel button:disabled { background: #90CAF9; cursor: not-allowed; }
 
-/* ============================================================
-   Results Container
-   ============================================================ */
 .results-container {
   display: flex;
   flex-direction: column;
   gap: 20px;
 }
 
-/* ============================================================
-   SQL Annotated View
-   ============================================================ */
 .sql-annotated-view {
   background: #fff;
   border-radius: 8px;
@@ -185,7 +171,6 @@ h2 {
   box-shadow: 0 0 0 2px rgba(21,101,192,0.4);
 }
 
-/* ---- Tooltip ---- */
 .annotation-tooltip {
   position: absolute;
   z-index: 1000;
@@ -253,9 +238,6 @@ h2 {
   font-weight: 600;
 }
 
-/* ============================================================
-   QEP Tree View
-   ============================================================ */
 .qep-tree-view {
   background: #fff;
   border-radius: 8px;
@@ -307,9 +289,6 @@ h2 {
 
 .tree-node { transition: opacity 0.15s; }
 
-/* ============================================================
-   AQP Section
-   ============================================================ */
 .aqp-section {
   background: #fff;
   border-radius: 8px;

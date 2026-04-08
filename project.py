@@ -1,18 +1,7 @@
-"""
-project.py
-Main entry point for the SQL Query Annotation Tool.
-SC3020 Database System Principles - Project 2
-
-Run this file to launch the application:
-    python project.py          # Launches web GUI (FastAPI + React)
-    python project.py --cli    # Launches CLI mode
-"""
-
 import sys
 
 
 def cli_mode():
-    """CLI mode for testing the annotation engine without the GUI."""
     from annotation import generate_annotations
 
     print("=" * 60)
@@ -31,7 +20,6 @@ def cli_mode():
         if not query or query.lower() == "quit":
             break
 
-        # Allow multi-line input (end with semicolon)
         while not query.endswith(";"):
             try:
                 line = input("...> ").strip()
@@ -39,7 +27,6 @@ def cli_mode():
                 break
             query += " " + line
 
-        # Remove trailing semicolon for EXPLAIN
         query = query.rstrip(";")
 
         try:

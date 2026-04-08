@@ -1,7 +1,3 @@
-/**
- * API wrappers for the FastAPI backend.
- */
-
 const API_BASE = '/api';
 
 export async function analyzeQuery(query) {
