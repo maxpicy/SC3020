@@ -1,0 +1,10 @@
+.git
+.idea
+__pycache__
+*.pyc
+.venv
+venv
+frontend/node_modules
+frontend/dist
+memory
+sample_queries.sql

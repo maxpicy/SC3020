@@ -1,0 +1,4 @@
+psycopg2-binary==2.9.9
+sqlparse==0.4.4
+fastapi==0.115.0
+uvicorn[standard]==0.30.6

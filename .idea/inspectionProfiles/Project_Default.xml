@@ -1,0 +1,52 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <list>
+          <option value="conformer" />
+          <option value="diffusers" />
+          <option value="fastapi" />
+          <option value="fastapi-cli" />
+          <option value="gdown" />
+          <option value="gradio" />
+          <option value="grpcio" />
+          <option value="grpcio-tools" />
+          <option value="hydra-core" />
+          <option value="HyperPyYAML" />
+          <option value="inflect" />
+          <option value="librosa" />
+          <option value="lightning" />
+          <option value="matplotlib" />
+          <option value="modelscope" />
+          <option value="networkx" />
+          <option value="numpy" />
+          <option value="omegaconf" />
+          <option value="onnx" />
+          <option value="openai-whisper" />
+          <option value="protobuf" />
+          <option value="pyarrow" />
+          <option value="pydantic" />
+          <option value="pyworld" />
+          <option value="rich" />
+          <option value="soundfile" />
+          <option value="tensorboard" />
+          <option value="torch" />
+          <option value="torchaudio" />
+          <option value="transformers" />
+          <option value="x-transformers" />
+          <option value="uvicorn" />
+          <option value="wetext" />
+          <option value="wget" />
+        </list>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyStubPackagesAdvertiser" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <list>
+          <option value="scipy" />
+        </list>
+      </option>
+    </inspection_tool>
+  </profile>
+</component>
